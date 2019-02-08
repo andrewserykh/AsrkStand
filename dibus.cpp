@@ -46,21 +46,21 @@ float dibus::value() {
 //---Функция запроса показаний из БДМГ300
 //FF FF FF 01 01 01 06 0B 01 00 6F 44 74 80 23 23 00 00 00 01 01 01
 bool dibus::getvalue(byte a1, byte a2, byte a3) {
-  packetout[0] = a1;
-  packetout[1] = a2;
-  packetout[2] = a3;
-  packetout[3] = 0x01;
-  packetout[4] = 0x01;
-  packetout[5] = 0x01;
-  packetout[6] = 0x06; //06-получить данные
-  packetout[7] = 0x7d; //0b-тип данных для БДМГ
-  packetout[8] = 0x01;
+  packetout[0] = a1;   //получатель
+  packetout[1] = a2;   //получатель
+  packetout[2] = a3;   //получатель
+  packetout[3] = 0x01; //отправитель
+  packetout[4] = 0x01; //отправитель
+  packetout[5] = 0x01; //отправитель
+  packetout[6] = 0x06; //тип пакета (06-получить данные БДМГ)
+  packetout[7] = 0x7d; //тип данных (0b-тип данных для БДМГ) (01 попробовать для ДУГА)
+  packetout[8] = 0x01; //размер данных
   packetout[9] = 0x00; //конец заголовка
   long crc = _crc(packetout, 10);
-  packetout[10] = (byte)(crc & 0xFF);
-  packetout[11] = (byte)((crc >> 8) & 0xFF);
-  packetout[12] = (byte)((crc >> 16) & 0xFF);
-  packetout[13] = (byte)((crc >> 24) & 0xFF);
+  packetout[10] = (byte)(crc & 0xFF);         // CRC заголовка
+  packetout[11] = (byte)((crc >> 8) & 0xFF);  // CRC заголовка
+  packetout[12] = (byte)((crc >> 16) & 0xFF); // CRC заголовка
+  packetout[13] = (byte)((crc >> 24) & 0xFF); // CRC заголовка
   packetout[14] = 0x00;
   packetout[15] = 0x00;
   packetout[16] = 0x00;
@@ -218,4 +218,3 @@ long dibus::_crc (byte b[], int len) {
   } // while
   return (CRC);
 }
-

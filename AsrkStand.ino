@@ -1,4 +1,4 @@
-/*
+/* v2.23
    _______   _________    RS-485:
   |       | | C    C  |   COM0 - Dx=[28]
   |       | | O    O  |   COM1 - Dx=[24]
@@ -45,7 +45,7 @@
 #include "converter.h"
 #include "modbusrtu.h"
 
-//---Типы приборов
+//---Типы приборов (также описаны в dibus.h)
 #define UNDEFINE   0  //не определен
 #define BDMG300    1  //БДМГ-3000
 #define DBGS11D    2  //ДБГ-С11Д
@@ -278,5 +278,3 @@ void SerialSend(int Port, byte packet[], byte len, int txdelay) {
   }
   digitalWrite(13, LOW);
 }
-
-
