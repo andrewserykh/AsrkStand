@@ -1,4 +1,4 @@
-/* v2.23
+/* v2.30
    _______   _________    RS-485:
   |       | | C    C  |   COM0 - Dx=[28]
   |       | | O    O  |   COM1 - Dx=[24]
@@ -65,22 +65,24 @@
 //---Распиновка последовательных портов RS-485
 #define RS485Transmit    HIGH
 #define RS485Receive     LOW
-#define RsDir0  28   // RS485 module 0
-#define RsDir1  24   // RS485 module 1
-#define RsDir2  22   // RS485 module 2
-#define RsDir3  26   // RS485 module 3
-#define RsDir4  29   // RS485 module 4
-#define STX4    22   // Software TX module 4
-#define SRX4    A8   // Software RX module 4
+#define RsDir0  28    //RS485 module 0 (28)
+#define RsDir1  24    //RS485 module 1 (24)
+#define RsDir2  22    //RS485 module 2 (22)
+#define RsDir3  26    //RS485 module 3 (26)
+#define RsDir4  29    //RS485 module 4 (29)
+#define STX4    A10   //Software TX module 4 (22)
+#define SRX4    A11   //Software RX module 4 (A8)
 
-#define STX5    23    // Software TX module 5
-#define SRX5    A15   // Software RX module 5
+#define STX5    A8    //Software TX module 5 (23)
+#define SRX5    A9    //Software RX module 5 (A15)
 //---
 #define GREEN   1
 #define YELLOW  2
 #define RED     3
 
 void(* resetArduino) (void) = 0;  //необходимо для перезагрузки
+
+bool Debug = true; //выводить в Serial отладочную информацию
 
 SoftwareSerial SSerial4(SRX4, STX4); //программные последовательные порты
 SoftwareSerial SSerial5(SRX5, STX5);
@@ -107,7 +109,7 @@ long LanMillis;
 void setup() {
   pinMode(13, OUTPUT); digitalWrite(13, HIGH); //встроенный led L
   Serial.begin(9600); //RS-232 COM0 Debug
-  Serial.println("Initialization..");
+  if (Debug) Serial.println("Initialization..");
   pinMode(RsDir0, OUTPUT); // TX Control
   pinMode(RsDir1, OUTPUT); // TX Control
   pinMode(RsDir2, OUTPUT); // TX Control
@@ -117,15 +119,29 @@ void setup() {
   Serial2.begin(9600);  // RS-485-2 module
   Serial3.begin(9600);  // RS-485-3 module
   SSerial4.begin(9600); // RS-485-4 module
-
   SSerial5.begin(9600); // RS-232 Nextion
 
-  Serial.print("EEPROM ip:"); Serial.print(EEPROM.read(0)); Serial.print(".");
-  Serial.print(EEPROM.read(1)); Serial.print("."); Serial.print(EEPROM.read(2));
-  Serial.print("."); Serial.println(EEPROM.read(3));
-  //выставляем последние два байта mac адреса случайной величиной
-  //  IPAddress ip(192,168,0,8);
-  IPAddress ip(EEPROM.read(0), EEPROM.read(1), EEPROM.read(2), EEPROM.read(3)); //считываем ip адрес из flash
+  if (Debug) {
+    Serial.print("EEPROM ip:"); Serial.print(EEPROM.read(0)); Serial.print(".");
+    Serial.print(EEPROM.read(1)); Serial.print("."); Serial.print(EEPROM.read(2));
+    Serial.print("."); Serial.println(EEPROM.read(3));
+  }
+  //считываем ip адрес из памяти
+  int tmpip[4];
+  tmpip[0] = EEPROM.read(0);
+  tmpip[1] = EEPROM.read(1);
+  tmpip[2] = EEPROM.read(2);
+  tmpip[3] = EEPROM.read(3);
+  //проверяем корректность считанного ip адреса
+  if (tmpip[0]==255){
+    if (Debug) Serial.println("Setting IP by default");
+    tmpip[0]=192;
+    tmpip[1]=168;
+    tmpip[2]=0;
+    tmpip[3]=8; 
+  }
+  IPAddress ip(tmpip[0], tmpip[1], tmpip[2], tmpip[3]); //устанавливаем ip адрес
+  //выставляем последние два байта mac адреса случайной величиной  //выставляем последние два байта mac адреса случайной величиной
   int mac3 = 1; int mac45 = 1; for (int i = 0; i < 5000; i++) {
     mac45 = mac45 + analogRead(A0); mac3 = mac3 - analogRead(A1);
   }
@@ -134,17 +150,19 @@ void setup() {
   LanString = "";
   Ethernet.begin(mac, ip);
   server.begin();
-  Serial.print("Server is at "); Serial.println(Ethernet.localIP());
+  if (Debug) Serial.print("Server is at "); Serial.println(Ethernet.localIP());
   delay(1000);
   mbAddr = EEPROM.read(4); //считываем Modbus адрес из flash
   for (int i = 0; i < 5; i++) {
     devAsrk[i].autostart = true;
     devAsrk[i].interval = 1000 * 2 + (i * 200); //интервал опроса 2000,2100,2200,.. раскидать опрос
     devAsrk[i].protocol = EEPROM.read(6 + i); // 6,7,8,9,10
+    if(devAsrk[i].protocol>10) devAsrk[i].protocol = AUTO;
     devAsrk[i].mbadr = EEPROM.read(11 + i); // 11,12,13,14
+    if(devAsrk[i].mbadr==255) devAsrk[i].mbadr = 1;
   }
   SignStatus = EEPROM.read(16);
-  Serial.println("Running.");
+  if (Debug) Serial.println("Running.");
   digitalWrite(13, LOW);
 }
 
@@ -161,7 +179,7 @@ void loop() {
         if (devAsrk[i].protocol == AUTO) {
           //devDibus.getvalue(0xff, 0xff, 0xff);
           //SerialSend(i, devDibus.packetout, devDibus.packetout_len);
-          //Serial.print("Send COM"); Serial.print(i); Serial.print(", len="); Serial.println(devDibus.packetout_len);
+          if(Debug){Serial.print("Send COM"); Serial.print(i); Serial.print(", len="); Serial.println(devDibus.packetout_len);}
         }//protocol = AUTO
 
         if (devAsrk[i].protocol == DIBUS) {

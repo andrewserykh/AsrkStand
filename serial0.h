@@ -54,24 +54,25 @@ for (int n = 0; n < 5; n++) { //перебор массива принятых �
 
   if (SerialInLen[n] > 0 && (millis() - SerialMillisRcv[n] > 100)) { //оттяжка на прием пакета целиком (для dibus = 100мс)
     devAsrk[n].isactive = true;
-Serial.println(SerialInLen[n]);
-
-//for (int q = 0; q < SerialInLen[n]; q++) { //вывод принятого пакета на консоль
-// Serial.print((byte)SerialIn[n][q], HEX); Serial.print(" ");
-//} Serial.println(" ");
 
     //04 04 04 01 01 01
     if (SerialInLen[n] > 6 && SerialInLen[n] < 96) { //предположительно по размеру это пакет
-//Serial.print("COM");
-//Serial.println(n);
-//Serial.println("#1 is packet");
+
+  if(Debug){
+    Serial.print("COM");
+    Serial.println(n);
+    Serial.println("#1 is packet");
+    for (int q = 0; q < SerialInLen[n]; q++) { //вывод принятого пакета на консоль
+    Serial.print((byte)SerialIn[n][q], HEX); Serial.print(" ");
+    } Serial.println(" ");
+  }
       if (SerialIn[n][0] == 0x01 && SerialIn[n][1] == 0x01 && SerialIn[n][2] == 0x01) { //предположительно это dibus начало 01 01 01
-//Serial.println("#2 maybe dibus");
+  if(Debug) Serial.println("#2 maybe dibus");
         //---прверка на тип пакета dibus
         for (int i = 0; i < SerialInLen[n]; i++) devDibus.packetin[i] = (byte)SerialIn[n][i]; //заполняем массив класса
         devDibus.packetin_len = SerialInLen[n];
         if (devDibus.ispacket()) { //принятые данные являются пакетом dibus
-//Serial.println("#3 is dibus");
+  if(Debug) Serial.println("#3 is dibus");
           devAsrk[n].protocol = DIBUS;
           devAsrk[n].mode = REQUEST;
           devAsrk[n].dbadr[0] = devDibus.a1();
@@ -81,19 +82,17 @@ Serial.println(SerialInLen[n]);
           if (devAsrk[n].type==BDMG300){
               devAsrk[n].value1 = devDibus.value();
               devAsrk[n].isactive=true;
-              Serial.println("BDMG300");
-              Serial.println(devAsrk[n].valuehuman(1));          
+              if(Debug)Serial.println(devAsrk[n].valuehuman(1));          
           }//type=BDMG300
           if (devAsrk[n].type==DBGS11D){
               devAsrk[n].value1 = devDibus.value();
               devAsrk[n].isactive=true;
-              Serial.println("DBGS11D");
-              Serial.println(devAsrk[n].valuehuman(1));          
+              if(Debug)Serial.println(devAsrk[n].valuehuman(1));          
           }//type=DBGS11D
           if (devAsrk[n].type==BAS1S){
               devAsrk[n].protocol = SIGNAL;
               devAsrk[n].isactive=true;
-              Serial.println("BAS1S");
+              if(Debug)Serial.println("BAS1S");
           }//type=BAS1S
           devAsrk[n].recieved();
         } else { //ispkt
@@ -107,7 +106,7 @@ Serial.println(SerialInLen[n]);
             devAsrk[n].dbadr[2] = devDibus.a3();
             devAsrk[n].type = BAS1S;
             devAsrk[n].recieved();
-            Serial.println("BAS1S");
+            if(Debug)Serial.println("BAS1S");
           }//if
         }//ispkt
       }//if предположительно это dibus
@@ -125,12 +124,11 @@ Serial.println(SerialInLen[n]);
             devAsrk[n].value2 = devModbus.getfloat(3);  //бета
             devAsrk[n].value3 = devModbus.getfloat(15); //радон
 
-            Serial.println(devAsrk[n].value1);
-            Serial.println(devAsrk[n].value2);
-            Serial.println(devAsrk[n].value3);
+            if(Debug)Serial.println(devAsrk[n].value1);
+            if(Debug)Serial.println(devAsrk[n].value2);
+            if(Debug)Serial.println(devAsrk[n].value3);
           }
           devAsrk[n].recieved();
-          Serial.println("UDA1AB");
         }//
       } // 0x04&0x12
 
