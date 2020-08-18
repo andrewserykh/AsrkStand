@@ -82,7 +82,7 @@
 
 void(* resetArduino) (void) = 0;  //необходимо для перезагрузки
 
-bool Debug = true; //выводить в Serial отладочную информацию
+bool Debug = false; //выводить в Serial отладочную информацию
 
 SoftwareSerial SSerial4(SRX4, STX4); //программные последовательные порты
 SoftwareSerial SSerial5(SRX5, STX5);
@@ -95,6 +95,8 @@ Mudbus Mb;
 int mbAddr;
 
 hmi Hmi;
+byte Hmi_fin[] = {0xff, 0xff, 0xff}; //добивка для приема экраном команды
+
 dibus devDibus;
 modbusrtu devModbus;
 devasrk devAsrk[5];
@@ -108,7 +110,7 @@ long LanMillis;
 
 void setup() {
   pinMode(13, OUTPUT); digitalWrite(13, HIGH); //встроенный led L
-  Serial.begin(9600); //RS-232 COM0 Debug
+  Serial.begin(9600); //RS-232 COM0 Debug/RS-485-0 module
   if (Debug) Serial.println("Initialization..");
   pinMode(RsDir0, OUTPUT); // TX Control
   pinMode(RsDir1, OUTPUT); // TX Control
@@ -151,6 +153,12 @@ void setup() {
   Ethernet.begin(mac, ip);
   server.begin();
   if (Debug) Serial.print("Server is at "); Serial.println(Ethernet.localIP());
+
+  SSerial5.print("ip.txt=\"Setup ");
+  SSerial5.print(Ethernet.localIP());
+  SSerial5.print("\"");
+  SSerial5.write(Hmi_fin, 3);
+  
   delay(1000);
   mbAddr = EEPROM.read(4); //считываем Modbus адрес из flash
   for (int i = 0; i < 5; i++) {
@@ -236,22 +244,18 @@ void loop() {
     if (millis() - Hmi.millis > 5000) { //отправляем данные на экран
       byte fin[] = {0xff, 0xff, 0xff}; //добивка для приема экраном команды
       for (int h = 0; h < 5; h++) {
-        SSerial5.print("tc");
+        SSerial5.print("t");
         SSerial5.print(h);
         SSerial5.print(".txt=\"");
-        if (Hmi.step == 0) {
-          SSerial5.print(devAsrk[h].valuehuman(1));
-        }
-        if (Hmi.step == 1) {
-          SSerial5.print(devAsrk[h].typehuman_en());
-        }
-        if (Hmi.step == 2) {
-          SSerial5.print(devAsrk[h].adrhuman());
-        }
+        SSerial5.print(devAsrk[h].typehuman_en());
+        SSerial5.print(" / ");        
+        SSerial5.print(devAsrk[h].adrhuman());
+        SSerial5.print(" / ");        
+        SSerial5.print(devAsrk[h].valuehuman(1));
         SSerial5.print("\"");
         SSerial5.write(fin, 3);
       }//for h
-      SSerial5.print("ta0.txt=\"");
+      SSerial5.print("ip.txt=\"");
       SSerial5.print(Ethernet.localIP());
       SSerial5.print("\"");
       SSerial5.write(fin, 3);
