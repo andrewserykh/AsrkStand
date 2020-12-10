@@ -106,6 +106,8 @@ String devasrk::typehuman() {
   if (type == UDMN100PD) return ("УДПН-100ПД");
   if (type == UDPN) return ("УДПН");
   if (type == BAS1S) return ("БАС-1С");
+  if (type == DUGA) return ("ДУГА");
+  if (type == BRIG) return ("БРИГ");
   return ("НЕ ОПРЕДЕЛЕН");
 }
 
@@ -117,12 +119,14 @@ String devasrk::typehuman_en() {
   if (type == UDMN100PD) return ("UDPN-100PD");
   if (type == UDPN) return ("UDPN");
   if (type == BAS1S) return ("BAS-1S");
+  if (type == DUGA) return ("DUGA");
+  if (type == BRIG) return ("BRIG");
   return ("-");
 }
 
 String devasrk::adrhuman() {
   String ret="";
-  if (protocol == DIBUS) {
+  if (protocol == DIBUS || protocol == INTRA) {
     ret+=(int)dbadr[0];
     ret+=(".");
     ret+=(int)dbadr[1];

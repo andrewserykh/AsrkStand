@@ -2,7 +2,7 @@
 #include "dibus.h"
 
 //---получить из пакета значение измеряемой величины
-float dibus::value() {
+float dibus::value(int index = 0) {
   float value = -1;
   union {
     char bytes[4];
@@ -14,16 +14,18 @@ float dibus::value() {
     int  ival;
   } type_int;
 
-  if ((packetin[6] == 0x07) && (packetin[7] == 0x01)) { //одна величина float
+  //if ((packetin[6] == 0x07) && (packetin[7] == 0x01)) { //одна величина float
+  if (type()==BDMG300){
     //---для БДМГ-300
     type_float.bytes[0] = packetin[15];
     type_float.bytes[1] = packetin[16];
     type_float.bytes[2] = packetin[17];
     type_float.bytes[3] = packetin[18];
     return (type_float.fval);
-  } // if ==0x07 & 0x01
+  } // if BDMG300
 
-  if ((packetin[6] == 0x07) && (packetin[7] == 0x7d)) { //одна величина float
+  //if ((packetin[6] == 0x07) && (packetin[7] == 0x7d)) { //одна величина float
+  if (type()==DBGS11D){
     //---для ДБГ-С11Д
     byte input_value[2];
     input_value[0] = packetin[22];
@@ -38,13 +40,44 @@ float dibus::value() {
     if (stage > 32) stage = (64 - stage) * -1;
     value = ((mantissa) / 100.0) * pow(10, stage);
     return (value);
-  } // if ==0x07 & 0x01
+  } // if DBGS11D
+
+  if (type()==DUGA){
+    if (index == 0){ //альфа
+    type_float.bytes[0] = packetin[35];
+    type_float.bytes[1] = packetin[36];
+    type_float.bytes[2] = packetin[37];
+    type_float.bytes[3] = packetin[38];
+    return (type_float.fval);
+    } //index=0
+    if (index == 1){ //бета
+    type_float.bytes[0] = packetin[39];
+    type_float.bytes[1] = packetin[40];
+    type_float.bytes[2] = packetin[41];
+    type_float.bytes[3] = packetin[42];
+    return (type_float.fval);
+    } //index=1
+    if (index == 2){ //гамма
+    type_float.bytes[0] = packetin[43];
+    type_float.bytes[1] = packetin[44];
+    type_float.bytes[2] = packetin[45];
+    type_float.bytes[3] = packetin[46];
+    return (type_float.fval);
+    } //index=2
+    if (index == 3){ // с
+    type_float.bytes[0] = packetin[47];
+    type_float.bytes[1] = packetin[48];
+    type_float.bytes[2] = packetin[49];
+    type_float.bytes[3] = packetin[50];
+    return (type_float.fval);
+    } //index=3
+
+  } // if DUGA
   return value;
 }
 
-
-//---Функция запроса показаний из БДМГ300
-//FF FF FF 01 01 01 06 0B 01 00 6F 44 74 80 23 23 00 00 00 01 01 01
+//---Функция запроса показаний
+//FF FF FF 01 01 01 06 0B 01 00 6F 44 74 80 23 23 00 00 00 01 01 01 - пример пакета для БДМГ-300 (описание dibus в .h файле)
 bool dibus::getvalue(byte a1, byte a2, byte a3) {
   packetout[0] = a1;   //получатель
   packetout[1] = a2;   //получатель
@@ -53,7 +86,7 @@ bool dibus::getvalue(byte a1, byte a2, byte a3) {
   packetout[4] = 0x01; //отправитель
   packetout[5] = 0x01; //отправитель
   packetout[6] = 0x06; //тип пакета (06-получить данные БДМГ)
-  packetout[7] = 0x7d; //тип данных (0b-тип данных для БДМГ) (01 попробовать для ДУГА)
+  packetout[7] = 0x7d; //тип данных (0b-тип данных для БДМГ)
   packetout[8] = 0x01; //размер данных
   packetout[9] = 0x00; //конец заголовка
   long crc = _crc(packetout, 10);
@@ -70,6 +103,58 @@ bool dibus::getvalue(byte a1, byte a2, byte a3) {
   txdelay = 20;
   return true;
 }
+
+//---Функция широковещательного запроса ИНТРА (ДУГА/БРИГ)
+//FF FF FF 01 01 01 04 00 00 00 0F 04 74 80
+bool dibus::broadcastintra() {
+  packetout[0] = 0xff;   //получатель
+  packetout[1] = 0xff;   //получатель
+  packetout[2] = 0xff;   //получатель
+  packetout[3] = 0x01; //отправитель
+  packetout[4] = 0x01; //отправитель
+  packetout[5] = 0x01; //отправитель
+  packetout[6] = 0x04; //тип пакета
+  packetout[7] = 0x00; //тип данных
+  packetout[8] = 0x00; //размер данных
+  packetout[9] = 0x00; //конец заголовка
+  long crc = _crc(packetout, 10);
+  packetout[10] = (byte)(crc & 0xFF);         // CRC заголовка
+  packetout[11] = (byte)((crc >> 8) & 0xFF);  // CRC заголовка
+  packetout[12] = (byte)((crc >> 16) & 0xFF); // CRC заголовка
+  packetout[13] = (byte)((crc >> 24) & 0xFF); // CRC заголовка
+  packetout_len = 14;
+  txdelay = 2;
+  return true;
+}
+
+
+//---Функция запроса показаний приборов ИНТРА
+bool dibus::getintra(byte a1, byte a2, byte a3) {
+  packetout[0] = a1;   //получатель
+  packetout[1] = a2;   //получатель
+  packetout[2] = a3;   //получатель
+  packetout[3] = 0x01; //отправитель
+  packetout[4] = 0x01; //отправитель
+  packetout[5] = 0x01; //отправитель
+  packetout[6] = 0x06; //тип пакета 06-получить данные
+  packetout[7] = 0x01; //тип данных 01-массив данных
+  packetout[8] = 0x01; //размер данных 01-из перехваченных пакетов ДУГИ,БРИГ
+  packetout[9] = 0x00; //конец заголовка
+  long crc = _crc(packetout, 10);
+  packetout[10] = (byte)(crc & 0xFF);         // CRC заголовка
+  packetout[11] = (byte)((crc >> 8) & 0xFF);  // CRC заголовка
+  packetout[12] = (byte)((crc >> 16) & 0xFF); // CRC заголовка
+  packetout[13] = (byte)((crc >> 24) & 0xFF); // CRC заголовка
+  packetout[14] = 0x30;
+  packetout[15] = 0x30;
+  packetout[16] = 0x00;
+  packetout[17] = 0x00;
+  packetout[18] = 0x00;
+  
+  packetout_len = 19; //последний индекс массива +1
+  txdelay = 3; //задержка вычисляется экспериментально, для 115200 она небольшая
+  return true;
+} 
 
 bool dibus::getlink(byte a1, byte a2, byte a3) {
   packetout[0] = a1; //Addr1
@@ -183,9 +268,13 @@ void dibus::showpacket() {
 //---получить тип прибора из пакета
 int dibus::type() {
   int type = 0;
-  if ((packetin[6] == 0x07) && (packetin[7] == 0x01)) return (BDMG300);
-  if ((packetin[6] == 0x07) && (packetin[7] == 0x7d)) return (DBGS11D);
-  if ((packetin[6] == 0x03) && (packetin[7] == 0x00)) return (BAS1S);
+  if ((packetin[6] == 0x07) && (packetin[7] == 0x01)) type = BDMG300;
+  if ((packetin[6] == 0x07) && (packetin[7] == 0x7d)) type = DBGS11D;
+  if ((packetin[6] == 0x03) && (packetin[7] == 0x00)) type = BAS1S;
+  if ((packetin[6] == 0x01) && (packetin[7] == 0x00)) type = DUGA; //ДУГА или БРИГ при ответе на широковещательный
+  if (packetin[6] == 0x07 && packetin[7] == 0x01 && packetin[14] == 0x30 && packetin_len > 14) type = DUGA; //при ответе на запрос данных
+  if (packetin[6] == 0x07 && packetin[7] == 0x01 && packetin[14] == 0x99 && packetin_len > 14) type = DUGA; //при ответе на запрос
+
   return type;
 }
 

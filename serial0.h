@@ -48,15 +48,16 @@ do { //оттяжечка на прием по софт порту
   }
 } while (millis() - SerialMillisRcv[4] < 100);
 
+for (int n = 0; n < 5; n++) if (SerialInLen[n]>95) SerialInLen[n]=95; //защита от переполнения буфера приема на все порты
+
 //-----------------------------------------------------------------------------------------------------Есть данные по 485 порту
 
 for (int n = 0; n < 5; n++) { //перебор массива принятых пакетов (0,1,2,3,4)
 
-  if (SerialInLen[n] > 0 && (millis() - SerialMillisRcv[n] > 100)) { //оттяжка на прием пакета целиком (для dibus = 100мс)
+  if (SerialInLen[n] > 0 && (millis() - SerialMillisRcv[n] > 50)) { //оттяжка на прием пакета целиком (для dibus = 100мс)
     devAsrk[n].isactive = true;
 
-    //04 04 04 01 01 01
-    if (SerialInLen[n] > 6 && SerialInLen[n] < 96) { //предположительно по размеру это пакет
+    if (SerialInLen[n] > 6) { //предположительно по размеру это пакет
 
   if(Debug){
     Serial.print("COM");
@@ -66,19 +67,25 @@ for (int n = 0; n < 5; n++) { //перебор массива принятых �
     Serial.print((byte)SerialIn[n][q], HEX); Serial.print(" ");
     } Serial.println(" ");
   }
-      if (SerialIn[n][0] == 0x01 && SerialIn[n][1] == 0x01 && SerialIn[n][2] == 0x01) { //предположительно это dibus начало 01 01 01
+  
+  if (SerialIn[n][0] == 0x01 && SerialIn[n][1] == 0x01 && SerialIn[n][2] == 0x01) { //предположительно это dibus начало 01 01 01 - адрес мастера
   if(Debug) Serial.println("#2 maybe dibus");
         //---прверка на тип пакета dibus
-        for (int i = 0; i < SerialInLen[n]; i++) devDibus.packetin[i] = (byte)SerialIn[n][i]; //заполняем массив класса
+        for (int i = 0; i < SerialInLen[n]; i++) devDibus.packetin[i] = (byte)SerialIn[n][i]; //копируем содержимое в массив класса
         devDibus.packetin_len = SerialInLen[n];
+        
         if (devDibus.ispacket()) { //принятые данные являются пакетом dibus
-  if(Debug) Serial.println("#3 is dibus");
-          devAsrk[n].protocol = DIBUS;
+          if(Debug) Serial.println("#3 is dibus");
+          if (devAsrk[n].protocol != INTRA) devAsrk[n].protocol = DIBUS; //проткол ИНТРА - исключаем из автоопределения, так как у него другая скорость порта 115200
           devAsrk[n].mode = REQUEST;
           devAsrk[n].dbadr[0] = devDibus.a1();
           devAsrk[n].dbadr[1] = devDibus.a2();
           devAsrk[n].dbadr[2] = devDibus.a3();
-          devAsrk[n].type = devDibus.type();
+          devAsrk[n].type = devDibus.type(); //определяем тип прибора на проводе
+          
+          if (Debug) Serial.print("Type of device:");
+          if (Debug) Serial.println(devDibus.type());
+          
           if (devAsrk[n].type==BDMG300){
               devAsrk[n].value1 = devDibus.value();
               devAsrk[n].isactive=true;
@@ -94,6 +101,17 @@ for (int n = 0; n < 5; n++) { //перебор массива принятых �
               devAsrk[n].isactive=true;
               if(Debug)Serial.println("BAS1S");
           }//type=BAS1S
+          if (devAsrk[n].type==DUGA){
+              devAsrk[n].protocol = INTRA;
+              devAsrk[n].isactive=true;
+              devAsrk[n].value1 = devDibus.value(0);
+              devAsrk[n].value2 = devDibus.value(1);
+              devAsrk[n].value3 = devDibus.value(2);
+              if(Debug)Serial.println("DUGA");
+              if(Debug)Serial.println(devAsrk[n].valuehuman(1));
+              if(Debug)Serial.println(devAsrk[n].valuehuman(2));
+              if(Debug)Serial.println(devAsrk[n].valuehuman(3));              
+          }//type=DUGA
           devAsrk[n].recieved();
         } else { //ispkt
           //!ИСКЛЮЧЕНИЕ: специально для БАС-1С у него странно расчитана crc заголовка
@@ -131,6 +149,9 @@ for (int n = 0; n < 5; n++) { //перебор массива принятых �
           devAsrk[n].recieved();
         }//
       } // 0x04&0x12
+
+      SignStatus = 1;
+      EEPROM.write(16, SignStatus);
 
     } //if length > <
 

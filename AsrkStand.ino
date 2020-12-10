@@ -1,4 +1,4 @@
-/* v2.30
+/* v2.32
    _______   _________    RS-485:
   |       | | C    C  |   COM0 - Dx=[28]
   |       | | O    O  |   COM1 - Dx=[24]
@@ -32,7 +32,7 @@
   16 signalisator status (GREEN,YELLOW,RED)
 
 */
-
+//#include <avr/pgmspace.h> //если используется PROGMEM
 #include <SoftwareSerial.h>
 #include <SPI.h>
 #include <Ethernet.h>
@@ -40,10 +40,10 @@
 #include "Mudbus.h"
 #include "dibus.h"
 #include "devasrk.h"
-//#include "bdmg.h"
 #include "hmi.h"
 #include "converter.h"
 #include "modbusrtu.h"
+//#include "eth_const.h"
 
 //---Типы приборов (также описаны в dibus.h)
 #define UNDEFINE   0  //не определен
@@ -53,15 +53,20 @@
 #define UDMN100PD  4  //УДМН-100ПД
 #define UDPN       5  //УДПН
 #define BAS1S      6  //БАС-1С
+#define DUGA       7  //ИНТРА ДУГА
+#define BRIG       8  //ИНТРА БРИГ
+#define DCON       9  //СИГНАЛИЗАТОР DCON 
 //---Режимы работы
 #define BROADCAST  0  //широковещательный запрос
 #define REQUEST    1  //опрос по адресу
-//---Протоколы связи
+//---Протоколы связи (также описаны в devasrk.h)
 #define AUTO       0
 #define DIBUS      1
 #define MODBUS     2
-#define SIGNAL     3 //светофор (только TX)
-#define SIMULATOR  4
+#define INTRA      3   //интра (скорость порта 115200)
+#define SIGNAL     4   //светофор (только TX)
+#define SIGNDCON   5   //светофор стендов ИНТРА
+#define SIMULATOR  6   //имитатор устройства
 //---Распиновка последовательных портов RS-485
 #define RS485Transmit    HIGH
 #define RS485Receive     LOW
@@ -82,12 +87,12 @@
 
 void(* resetArduino) (void) = 0;  //необходимо для перезагрузки
 
-bool Debug = true; //выводить в Serial отладочную информацию
+bool Debug = false; //выводить в Serial отладочную информацию
 
 SoftwareSerial SSerial4(SRX4, STX4); //программные последовательные порты
 SoftwareSerial SSerial5(SRX5, STX5);
 
-char SerialIn[7][64]; //буфер приема по serial портам
+char SerialIn[7][96]; //буфер приема по serial портам
 byte SerialInLen[7]; //заполнение буфера
 long SerialMillisRcv[7]; //прием по 485 порту (отсрочка на прием всего пакета)
 
@@ -109,18 +114,56 @@ long LanMillis;
 void setup() {
   pinMode(13, OUTPUT); digitalWrite(13, HIGH); //встроенный led L
   Serial.begin(9600); //RS-232 COM0 Debug
-  if (Debug) Serial.println("Initialization..");
+  if (Debug) Serial.println("");
+  if (Debug) Serial.println("Init..");
   pinMode(RsDir0, OUTPUT); // TX Control
   pinMode(RsDir1, OUTPUT); // TX Control
   pinMode(RsDir2, OUTPUT); // TX Control
   pinMode(RsDir3, OUTPUT); // TX Control
   pinMode(RsDir4, OUTPUT); // TX Control
-  Serial1.begin(9600);  // RS-485-1 module
-  Serial2.begin(9600);  // RS-485-2 module
-  Serial3.begin(9600);  // RS-485-3 module
-  SSerial4.begin(9600); // RS-485-4 module
   SSerial5.begin(9600); // RS-232 Nextion
+  byte fin[] = {0xff, 0xff, 0xff}; //добивка для приема экраном команды
+  SSerial5.print("ta0.txt=\"Loading..\"");
+  SSerial5.write(fin, 3);
 
+  if (Debug) Serial.print("Load cfg..");
+  mbAddr = EEPROM.read(4); //считываем Modbus адрес из flash
+  for (int i = 0; i < 5; i++) {
+    devAsrk[i].autostart = true;
+    devAsrk[i].interval = 1000 * 2 + (i * 200); //интервал опроса 2000,2100,2200,.. раскидать опрос
+    devAsrk[i].protocol = EEPROM.read(6 + i); // 6,7,8,9,10
+    if(devAsrk[i].protocol>10) devAsrk[i].protocol = AUTO;
+    devAsrk[i].mbadr = EEPROM.read(11 + i); // 11,12,13,14
+    if(devAsrk[i].mbadr==255) devAsrk[i].mbadr = 1;
+  }
+  SignStatus = EEPROM.read(16);
+  if (SignStatus > RED) { //проверка корректности записанного состояния светофора
+    SignStatus = GREEN;
+    EEPROM.write(16, SignStatus);
+  }
+  if (Debug) Serial.println("ok");
+
+  long baud = 9600;
+  if (devAsrk[1].protocol == INTRA) baud = 115200;
+  if (devAsrk[1].protocol == SIGNDCON) baud = 57600;
+  
+  Serial1.begin(baud);  // RS-485-1 module
+  if (Debug) Serial.println(baud);
+  baud = 9600;
+  if (devAsrk[2].protocol == INTRA) baud = 115200;
+  if (devAsrk[2].protocol == SIGNDCON) baud = 57600;  
+  Serial2.begin(baud);  // RS-485-2 module
+  if (Debug) Serial.println(baud);
+  baud = 9600;
+  if (devAsrk[3].protocol == INTRA) baud = 115200;
+  if (devAsrk[3].protocol == SIGNDCON) baud = 57600;  
+  Serial3.begin(baud);  // RS-485-3 module
+  if (Debug) Serial.println(baud);
+  baud = 9600;
+  if (devAsrk[4].protocol == INTRA) baud = 115200;
+  if (devAsrk[4].protocol == SIGNDCON) baud = 57600;  
+  SSerial4.begin(baud); // RS-485-4 module
+  if (Debug) Serial.println(baud);
   if (Debug) {
     Serial.print("EEPROM ip:"); Serial.print(EEPROM.read(0)); Serial.print(".");
     Serial.print(EEPROM.read(1)); Serial.print("."); Serial.print(EEPROM.read(2));
@@ -133,8 +176,8 @@ void setup() {
   tmpip[2] = EEPROM.read(2);
   tmpip[3] = EEPROM.read(3);
   //проверяем корректность считанного ip адреса
-  if (tmpip[0]==255){
-    if (Debug) Serial.println("Setting IP by default");
+  if (tmpip[0]==255 ||tmpip[3]==0){
+    if (Debug) Serial.println("Default IP");
     tmpip[0]=192;
     tmpip[1]=168;
     tmpip[2]=0;
@@ -150,19 +193,11 @@ void setup() {
   LanString = "";
   Ethernet.begin(mac, ip);
   server.begin();
-  if (Debug) Serial.print("Server is at "); Serial.println(Ethernet.localIP());
   delay(1000);
-  mbAddr = EEPROM.read(4); //считываем Modbus адрес из flash
-  for (int i = 0; i < 5; i++) {
-    devAsrk[i].autostart = true;
-    devAsrk[i].interval = 1000 * 2 + (i * 200); //интервал опроса 2000,2100,2200,.. раскидать опрос
-    devAsrk[i].protocol = EEPROM.read(6 + i); // 6,7,8,9,10
-    if(devAsrk[i].protocol>10) devAsrk[i].protocol = AUTO;
-    devAsrk[i].mbadr = EEPROM.read(11 + i); // 11,12,13,14
-    if(devAsrk[i].mbadr==255) devAsrk[i].mbadr = 1;
+  if (Debug) {
+    Serial.print("Server "); Serial.print(Ethernet.localIP());
+    Serial.println("..run");
   }
-  SignStatus = EEPROM.read(16);
-  if (Debug) Serial.println("Running.");
   digitalWrite(13, LOW);
 }
 
@@ -172,7 +207,6 @@ void loop() {
     //---Опрос приборов
     for (int i = 0; i < 5; i++) { //перебор всех приборов
       if (millis() - devAsrk[i].millis > devAsrk[i].interval) { //отправляем запрос данных
-
         //SerialSend(i + 1, devDibus.setsiren(0xe9, 0xbf, 0x93)); //отправляем широковещательный запрос ping
         //SerialSend(i + 1, devDibus.setsiren(0xff, 0xff, 0xff)); //отправляем широковещательный запрос ping
 
@@ -210,14 +244,35 @@ void loop() {
           }//mode=REQUEST
         }//protocol=MODBUS
 
+        if (devAsrk[i].protocol == INTRA) {
+          if (devAsrk[i].mode == BROADCAST) {
+            devDibus.broadcastintra();
+            SerialSend(i, devDibus.packetout, devDibus.packetout_len, devDibus.txdelay);
+            devAsrk[i].sended();
+          }//mode=BROADCAST
+          if (devAsrk[i].mode == REQUEST) {
+            devDibus.getintra(devAsrk[i].dbadr[0], devAsrk[i].dbadr[1], devAsrk[i].dbadr[2]);
+            SerialSend(i, devDibus.packetout, devDibus.packetout_len, devDibus.txdelay);
+            devAsrk[i].sended();
+          }//mode=REQUEST
+        }//protocol=INTRA
+
         if (devAsrk[i].protocol == SIGNAL) {
-          SignStatus++;
-          if (SignStatus > 3) SignStatus = 1;
           devDibus.setsign(0xff, 0xff, 0xff, SignStatus);
           SerialSend(i, devDibus.packetout, devDibus.packetout_len, devDibus.txdelay);
           devAsrk[i].sended();
-          //          Serial.print("Signal send s="); Serial.println(SignStatus);
         }//protocol=SIGNAL
+
+        if (devAsrk[i].protocol == SIGNDCON) {
+          String strDcon;
+          if (SignStatus==GREEN) strDcon = "#01A001#01A100#01A200";
+          if (SignStatus==YELLOW) strDcon = "#01A000#01A101#01A200";
+          if (SignStatus==RED) strDcon = "#01A000#01A100#01A201";
+          SerialSendStr(i, strDcon, 10);
+          devAsrk[i].sended();
+          if (Debug) Serial.print("Sign:"); 
+          if (Debug) Serial.println(SignStatus);
+        }//protocol=SIGNDCON
 
         if (devAsrk[i].protocol == SIMULATOR) {
           devAsrk[i].value1 = 0.00000001F + ( 0.0000000001F * random(100));
@@ -235,6 +290,10 @@ void loop() {
 
     if (millis() - Hmi.millis > 5000) { //отправляем данные на экран
       byte fin[] = {0xff, 0xff, 0xff}; //добивка для приема экраном команды
+      SSerial5.print("ta0.txt=\"");
+      SSerial5.print(Ethernet.localIP());
+      SSerial5.print("\"");
+      SSerial5.write(fin, 3);
       for (int h = 0; h < 5; h++) {
         SSerial5.print("tc");
         SSerial5.print(h);
@@ -251,10 +310,6 @@ void loop() {
         SSerial5.print("\"");
         SSerial5.write(fin, 3);
       }//for h
-      SSerial5.print("ta0.txt=\"");
-      SSerial5.print(Ethernet.localIP());
-      SSerial5.print("\"");
-      SSerial5.write(fin, 3);
       Hmi.step++;
       if (Hmi.step > 2) Hmi.step = 0;
       Hmi.millis = millis();
@@ -265,7 +320,7 @@ void loop() {
   }
 }
 
-//---Универсальная функция отправки пакета по RS-486 порту
+//---Универсальные функции отправки пакета по RS-486 порту
 void SerialSend(int Port, byte packet[], byte len, int txdelay) {
   digitalWrite(13, HIGH); //индикация отправки встроенным L led
   switch (Port) {
@@ -290,6 +345,37 @@ void SerialSend(int Port, byte packet[], byte len, int txdelay) {
     case 4:
       digitalWrite(RsDir4, RS485Transmit);
       SSerial4.write(packet, len);
+      delay(txdelay);
+      digitalWrite(RsDir4, RS485Receive);
+      break;
+  }
+  digitalWrite(13, LOW);
+}
+
+void SerialSendStr(int Port, String packet, int txdelay) {
+  digitalWrite(13, HIGH); //индикация отправки встроенным L led
+  switch (Port) {
+    case 1:
+      digitalWrite(RsDir1, RS485Transmit);
+      Serial1.print(packet);
+      delay(txdelay);
+      digitalWrite(RsDir1, RS485Receive);
+      break;
+    case 2:
+      digitalWrite(RsDir2, RS485Transmit);
+      Serial2.print(packet);
+      delay(txdelay);
+      digitalWrite(RsDir2, RS485Receive);
+      break;
+    case 3:
+      digitalWrite(RsDir3, RS485Transmit);
+      Serial3.print(packet);
+      delay(txdelay);
+      digitalWrite(RsDir3, RS485Receive);
+      break;
+    case 4:
+      digitalWrite(RsDir4, RS485Transmit);
+      SSerial4.print(packet);
       delay(txdelay);
       digitalWrite(RsDir4, RS485Receive);
       break;

@@ -4,6 +4,7 @@
 #ifdef ARDUINO
 
 if (millis() - LanMillis > 1000) {
+  
   LanMillis = millis();
 
   EthernetClient client = server.available();
@@ -19,6 +20,9 @@ if (millis() - LanMillis > 1000) {
         LanString += c;
         if (c == '\n' && currentLineIsBlank) {
           //---Разбор принятых данных по Web
+          if (LanString.indexOf("reset") > 0) {
+            resetArduino();
+          }
           if (LanString.indexOf("&fin=1") > 0) {
             String tempip = LanString.substring((LanString.indexOf("/?ip=") + 5), LanString.indexOf("&mb="));
             //---парсинг ip адреса
@@ -48,18 +52,15 @@ if (millis() - LanMillis > 1000) {
             temp = LanString.substring((LanString.indexOf("&pc4=") + 5), LanString.indexOf("&fin=")).toInt();
             EEPROM.write(10, temp);
             devAsrk[4].protocol = temp;
-            //resetArduino();
           }
           client.println("HTTP/1.1 200 OK");
           client.println("Content-Type: text/html");
-          client.println("Connection: close");  // the connection will be closed after completion of the response
+          client.println("Connection: close");
           client.println();
-          client.println("<!DOCTYPE HTML>");
-          client.print("<html><head><meta charset=\"UTF-8\">");
-          client.print("<title>Стенд радиационного контроля</title></head><body>");
-          client.print("<form name=\"f\" method=\"get\">");
-          client.print("<table style=\"border: 1px solid #aaa; background: #eee;\">");
-          client.print("<tr style=\"background: #ddd;\"><td colspan=\"2\">Состояние</td></tr>");
+          client.print("<!DOCTYPE HTML><html><head><meta charset=\"UTF-8\"><title>Стенд радиационного контроля</title></head><body><h2><a href='http://");
+          client.print(Ethernet.localIP());
+          client.print("'>ОБНОВИТЬ</a></h2>");
+          client.print("<form name=\"f\" method=\"get\"><table style=\"border: 1px solid #aaa; background: #eee;\"><tr style=\"background: #ddd;\"><td colspan=\"2\">Состояние</td></tr>");
           for (int i = 0; i < 5; i++) {
             client.print("<tr><td>Канал ");
             client.print(i + 1);
@@ -84,7 +85,7 @@ if (millis() - LanMillis > 1000) {
             client.print("</td></tr>");
           }
           client.print("<tr style=\"background: #ddd;\"><td colspan=\"2\">Настройки</td></tr>");
-          client.print("<tr><td>MAC адрес:</td><td>");
+          client.print("<tr><td>MAC адрес</td><td>");
           client.print((byte)mac[0], HEX);
           client.print((byte)mac[1], HEX);
           client.print((byte)mac[2], HEX);
@@ -92,26 +93,34 @@ if (millis() - LanMillis > 1000) {
           client.print((byte)mac[4], HEX);
           client.print((byte)mac[5], HEX);
           client.print("</td></tr>");
-          client.print("<tr><td>Сетевой адрес:</td><td><input type=\"text\" name=\"ip\" value=\"");
+          client.print("<tr><td>Сетевой адрес</td><td><input type=\"text\" name=\"ip\" value=\"");
           client.print(Ethernet.localIP());
-          client.print("\"></td></tr>");
+          client.print("\">");
+          client.print("</td></tr>");
           client.print("<tr><td>Modbus-slave адрес:</td><td><input type=\"text\" name=\"mb\" value=\"");
           client.print(mbAddr);
-          client.print("\"></td></tr>");
+          client.print("\">");
+          client.print("</td></tr>");
           client.print("<tr style=\"background: #ddd;\"><td colspan=\"2\">Интерфейсы</td></tr>");
 
-          String chsel[5];
-          chsel[0] = ""; chsel[1] = ""; chsel[2] = ""; chsel[3] = ""; chsel[4] = ""; chsel[devAsrk[0].protocol] = "selected";
-          client.print("<tr><td>Режим канал 1:</td><td><select name=\"pc0\"><option value=\"0\">авто</option><option value=\"1\"" + chsel[1] + ">dibus</option><option value=\"2\"" + chsel[2] + ">modbus</option><option value=\"3\"" + chsel[3] + ">светофор</option><option value=\"4\"" + chsel[4] + ">имитатор</option></select></td></tr>");
-          chsel[0] = ""; chsel[1] = ""; chsel[2] = ""; chsel[3] = ""; chsel[4] = ""; chsel[devAsrk[1].protocol] = "selected";
-          client.print("<tr><td>Режим канал 2:</td><td><select name=\"pc1\"><option value=\"0\">авто</option><option value=\"1\"" + chsel[1] + ">dibus</option><option value=\"2\"" + chsel[2] + ">modbus</option><option value=\"3\"" + chsel[3] + ">светофор</option><option value=\"4\"" + chsel[4] + ">имитатор</option></select></td></tr>");
-          chsel[0] = ""; chsel[1] = ""; chsel[2] = ""; chsel[3] = ""; chsel[4] = ""; chsel[devAsrk[2].protocol] = "selected";
-          client.print("<tr><td>Режим канал 3:</td><td><select name=\"pc2\"><option value=\"0\">авто</option><option value=\"1\"" + chsel[1] + ">dibus</option><option value=\"2\"" + chsel[2] + ">modbus</option><option value=\"3\"" + chsel[3] + ">светофор</option><option value=\"4\"" + chsel[4] + ">имитатор</option></select></td></tr>");
-          chsel[0] = ""; chsel[1] = ""; chsel[2] = ""; chsel[3] = ""; chsel[4] = ""; chsel[devAsrk[3].protocol] = "selected";
-          client.print("<tr><td>Режим канал 4:</td><td><select name=\"pc3\"><option value=\"0\">авто</option><option value=\"1\"" + chsel[1] + ">dibus</option><option value=\"2\"" + chsel[2] + ">modbus</option><option value=\"3\"" + chsel[3] + ">светофор</option><option value=\"4\"" + chsel[4] + ">имитатор</option></select></td></tr>");
-          chsel[0] = ""; chsel[1] = ""; chsel[2] = ""; chsel[3] = ""; chsel[4] = ""; chsel[devAsrk[4].protocol] = "selected";
-          client.print("<tr><td>Режим канал 5:</td><td><select name=\"pc4\"><option value=\"0\">авто</option><option value=\"1\"" + chsel[1] + ">dibus</option><option value=\"2\"" + chsel[2] + ">modbus</option><option value=\"3\"" + chsel[3] + ">светофор</option><option value=\"4\"" + chsel[4] + ">имитатор</option></select></td></tr>");
+          String chsel[10];
+          for(int n=0;n<10;n++) chsel[n] = "";chsel[devAsrk[0].protocol] = "selected";
+          client.print("<tr><td>Режим канал 1</td><td><select name=\"pc0\"><option value=\""+String(AUTO)+"\">авто</option><option value=\""+String(DIBUS)+"\"" + chsel[1] + ">dibus</option><option value=\""+String(MODBUS)+"\"" + chsel[2] + ">modbus</option><option value=\""+String(SIGNAL)+"\"" + chsel[3] + ">бас-1с</option><option value=\""+String(SIMULATOR)+"\"" + chsel[4] + ">имитатор</option></select></td></tr>");
+          for(int n=0;n<10;n++) chsel[n] = "";chsel[devAsrk[1].protocol] = "selected";
+          client.print("<tr><td>Режим канал 2</td><td><select name=\"pc1\"><option value=\""+String(AUTO)+"\">авто</option><option value=\""+String(DIBUS)+"\"" + chsel[1] + ">dibus</option><option value=\""+String(MODBUS)+"\"" + chsel[2] + ">modbus</option><option value=\""+String(INTRA)+"\"" + chsel[3] + ">интра</option><option value=\""+String(SIGNAL)+"\"" + chsel[4] + ">бас-1с</option><option value=\""+String(SIGNDCON)+"\"" + chsel[5] + ">светофор dcon</option><option value=\""+String(SIMULATOR)+"\"" + chsel[5] + ">имитатор</option></select></td></tr>");
+          for(int n=0;n<10;n++) chsel[n] = "";chsel[devAsrk[2].protocol] = "selected";
+          client.print("<tr><td>Режим канал 3</td><td><select name=\"pc2\"><option value=\""+String(AUTO)+"\">авто</option><option value=\""+String(DIBUS)+"\"" + chsel[1] + ">dibus</option><option value=\""+String(MODBUS)+"\"" + chsel[2] + ">modbus</option><option value=\""+String(INTRA)+"\"" + chsel[3] + ">интра</option><option value=\""+String(SIGNAL)+"\"" + chsel[4] + ">бас-1с</option><option value=\""+String(SIGNDCON)+"\"" + chsel[5] + ">светофор dcon</option><option value=\""+String(SIMULATOR)+"\"" + chsel[5] + ">имитатор</option></select></td></tr>");
+          for(int n=0;n<10;n++) chsel[n] = "";chsel[devAsrk[3].protocol] = "selected";
+          client.print("<tr><td>Режим канал 4</td><td><select name=\"pc3\"><option value=\""+String(AUTO)+"\">авто</option><option value=\""+String(DIBUS)+"\"" + chsel[1] + ">dibus</option><option value=\""+String(MODBUS)+"\"" + chsel[2] + ">modbus</option><option value=\""+String(INTRA)+"\"" + chsel[3] + ">интра</option><option value=\""+String(SIGNAL)+"\"" + chsel[4] + ">бас-1с</option><option value=\""+String(SIGNDCON)+"\"" + chsel[5] + ">светофор dcon</option><option value=\""+String(SIMULATOR)+"\"" + chsel[5] + ">имитатор</option></select></td></tr>");
+          for(int n=0;n<10;n++) chsel[n] = ""; chsel[devAsrk[4].protocol] = "selected";
+          client.print("<tr><td>Режим канал 5</td><td><select name=\"pc4\"><option value=\""+String(AUTO)+"\">авто</option><option value=\""+String(DIBUS)+"\"" + chsel[1] + ">dibus</option><option value=\""+String(MODBUS)+"\"" + chsel[2] + ">modbus</option><option value=\""+String(SIGNAL)+"\"" + chsel[4] + ">бас-1с</option><option value=\""+String(SIGNDCON)+"\"" + chsel[5] + ">светофор dcon</option><option value=\""+String(SIMULATOR)+"\"" + chsel[6] + ">имитатор</option></select></td></tr>");
 
+          
+          client.print("<tr style=\"background: #ddd;\"><td colspan=\"2\">Уставки</td></tr>");
+          client.print("<tr><td>Канал 1.1</td><td><input type='text' name='c1' value='0'></td></tr>");
+          
+          
+          client.print("<tr><td></td><td><a href='/reset'>перезапустить контроллер</a></td></tr>");
           client.print("<input type=\"hidden\" name=\"fin\" value=\"1\">");
           client.print("<tr><td></td><td><button type=\"submit\">Сохранить</button></td></tr>");
           client.print("</table></form>");

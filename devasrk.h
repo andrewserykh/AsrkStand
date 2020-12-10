@@ -19,12 +19,17 @@
 #define UDMN100PD  4  //УДМН-100ПД
 #define UDPN       5  //УДПН
 #define BAS1S      6  //БАС-1С
+#define DUGA       7  //ИНТРА ДУГА
+#define BRIG       8  //ИНТРА БРИГ
+#define DCON       9  //СИГНАЛИЗАТОР DCON 
 //---Протоколы связи
 #define AUTO       0
 #define DIBUS      1
 #define MODBUS     2
-#define SIGNAL     3 //светофор (только TX)
-#define SIMULATOR  4
+#define INTRA      3   //интра (скорость порта 115200)
+#define SIGNAL     4   //светофор (только TX)
+#define SIGNDCON   5   //светофор стендов ИНТРА
+#define SIMULATOR  6   //имитатор устройства
 
 
 
